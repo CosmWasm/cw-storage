@@ -3,7 +3,17 @@ name = "cw-storage"
 version = "0.1.0"
 authors = ["Ethan Frey <ethanfrey@users.noreply.github.com>"]
 edition = "2018"
+description = "CosmWasm library with useful helpers for Storage patterns"
+repository = "https://github.com/confio/cw-storage"
+license = "Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[badges]
+circle-ci = { repository = "confio/cw-storage", branch = "master" }
+maintenance = { status = "actively-developed" }
+
 [dependencies]
+cosmwasm = "~0.6.0"
+serde = { version = "~1.0.103", default-features = false, features = ["derive", "alloc"] }
+snafu = { version = "~0.5.0", default-features = false, features = ["rust_1_30"] }
