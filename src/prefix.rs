@@ -157,4 +157,24 @@ mod test {
         let b = ReadonlyPrefixedStorage::new(b"bar", &a);
         assert_eq!(Some(b"time".to_vec()), b.get(b"second"));
     }
+
+    // demo
+    #[test]
+    fn foo() {
+        use cw_storage::{prefixed, prefixed_ro};
+
+        let mut store = MockStorage::new();
+
+        let mut foos = prefixed(b"foo", &mut store);
+        foos.set(b"one", b"foo");
+
+        let mut bars = prefixed(b"bar", &mut store);
+        bars.set(b"one", b"bar");
+
+        let read_foo = prefixed_ro(b"foo", &store);
+        assert_eq!(b"foo".to_vec(), read_foo.get(b"one").unwrap());
+
+        let read_bar = prefixed_ro(b"bar", &store);
+        assert_eq!(b"bar".to_vec(), read_bar.get(b"one").unwrap());
+    }
 }
