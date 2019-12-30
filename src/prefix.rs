@@ -1,7 +1,10 @@
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
 // prefixed_ro is a helper function for less verbose usage
-pub fn prefixed_ro<'a, T: ReadonlyStorage>(prefix: &[u8], storage: &'a T) -> ReadonlyPrefixedStorage<'a, T> {
+pub fn prefixed_ro<'a, T: ReadonlyStorage>(
+    prefix: &[u8],
+    storage: &'a T,
+) -> ReadonlyPrefixedStorage<'a, T> {
     ReadonlyPrefixedStorage::new(prefix, storage)
 }
 
@@ -25,6 +28,7 @@ impl<'a, T: ReadonlyStorage> ReadonlyPrefixedStorage<'a, T> {
 
     // note: multilevel is here for demonstration purposes, but may well be removed
     // or modified
+    #[allow(dead_code)]
     fn multilevel(prefixes: &[&[u8]], storage: &'a T) -> Self {
         ReadonlyPrefixedStorage {
             prefix: multi_length_prefix(prefixes),
@@ -56,6 +60,7 @@ impl<'a, T: Storage> PrefixedStorage<'a, T> {
 
     // note: multilevel is here for demonstration purposes, but may well be removed
     // or modified
+    #[allow(dead_code)]
     fn multilevel(prefixes: &[&[u8]], storage: &'a mut T) -> Self {
         PrefixedStorage {
             prefix: multi_length_prefix(prefixes),
@@ -92,6 +97,7 @@ fn length_prefix(prefix: &[u8]) -> Vec<u8> {
 }
 
 // prepend length and store this
+#[allow(dead_code)]
 fn multi_length_prefix(prefixes: &[&[u8]]) -> Vec<u8> {
     let mut size = prefixes.len();
     for &p in prefixes {
