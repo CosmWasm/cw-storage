@@ -1,5 +1,15 @@
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
+// prefixed_ro is a helper function for less verbose usage
+pub fn prefixed_ro<'a, T: ReadonlyStorage>(prefix: &[u8], storage: &'a T) -> ReadonlyPrefixedStorage<'a, T> {
+    ReadonlyPrefixedStorage::new(prefix, storage)
+}
+
+// prefixed_rw is a helper function for less verbose usage
+pub fn prefixed<'a, T: Storage>(prefix: &[u8], storage: &'a mut T) -> PrefixedStorage<'a, T> {
+    PrefixedStorage::new(prefix, storage)
+}
+
 pub struct ReadonlyPrefixedStorage<'a, T: ReadonlyStorage> {
     prefix: Vec<u8>,
     storage: &'a T,
@@ -14,7 +24,7 @@ impl<'a, T: ReadonlyStorage> ReadonlyPrefixedStorage<'a, T> {
     }
 
     // note: multilevel is here for demonstration purposes, but may well be removed
-    // before exposing any of these demo apis
+    // or modified
     fn multilevel(prefixes: &[&[u8]], storage: &'a T) -> Self {
         ReadonlyPrefixedStorage {
             prefix: multi_length_prefix(prefixes),
@@ -45,7 +55,7 @@ impl<'a, T: Storage> PrefixedStorage<'a, T> {
     }
 
     // note: multilevel is here for demonstration purposes, but may well be removed
-    // before exposing any of these demo apis
+    // or modified
     fn multilevel(prefixes: &[&[u8]], storage: &'a mut T) -> Self {
         PrefixedStorage {
             prefix: multi_length_prefix(prefixes),
