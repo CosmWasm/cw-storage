@@ -24,10 +24,10 @@ jobs:
             - v4-cargo-cache-base-{{ arch }}-{{ checksum "Cargo.lock" }}
       - run:
           name: Build all targets (including workspaces)
-          command: cargo build --locked
+          command: cargo build
       - run:
           name: Run all tests (including workspaces)
-          command: cargo test --locked
+          command: cargo test
       - save_cache:
           paths:
             - /usr/local/cargo/registry
