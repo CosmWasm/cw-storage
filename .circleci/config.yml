@@ -1,14 +1,14 @@
 version: 2
 workflows:
   version: 2
-  test:
+  checks:
     jobs:
-      - base
+      - test
       - fmt
       - clippy
 
 jobs:
-  base:
+  test:
     docker:
       - image: rust:1.39
     steps:

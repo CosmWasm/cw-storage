@@ -60,8 +60,8 @@ where
 mod test {
     use super::*;
     use cosmwasm::mock::MockStorage;
-    use serde::{Serialize, Deserialize};
     use named_type_derive::NamedType;
+    use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug)]
     struct Data {
@@ -79,7 +79,10 @@ mod test {
         assert_eq!(bucket.may_load(b"maria").unwrap(), None);
 
         // save data
-        let data = Data{name: "Maria".to_string(), age: 42};
+        let data = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
         bucket.save(b"maria", &data).unwrap();
 
         // load it properly
