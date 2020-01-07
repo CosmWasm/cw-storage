@@ -1,7 +1,7 @@
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
-// prefixed_ro is a helper function for less verbose usage
-pub fn prefixed_ro<'a, T: ReadonlyStorage>(
+// prefixed_read is a helper function for less verbose usage
+pub fn prefixed_read<'a, T: ReadonlyStorage>(
     prefix: &[u8],
     storage: &'a T,
 ) -> ReadonlyPrefixedStorage<'a, T> {

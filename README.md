@@ -23,7 +23,7 @@ or SQL tables.
 Since we have different types for `Storage` and `ReadonlyStorage`, we use two different constructors:
 
 ```rust
-use cw_storage::{prefixed, prefixed_ro};
+use cw_storage::{prefixed, prefixed_read};
 
 let mut store = MockStorage::new();
 
@@ -33,10 +33,10 @@ foos.set(b"one", b"foo");
 let mut bars = prefixed(b"bar", &mut store);
 bars.set(b"one", b"bar");
 
-let read_foo = prefixed_ro(b"foo", &store);
+let read_foo = prefixed_read(b"foo", &store);
 assert_eq!(b"foo".to_vec(), read_foo.get(b"one").unwrap());
 
-let read_bar = prefixed_ro(b"bar", &store);
+let read_bar = prefixed_read(b"bar", &store);
 assert_eq!(b"bar".to_vec(), read_bar.get(b"one").unwrap());
 ```
 
