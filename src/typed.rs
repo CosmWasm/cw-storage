@@ -5,13 +5,20 @@ use std::marker::PhantomData;
 
 use cosmwasm::errors::{ContractErr, ParseErr, Result, SerializeErr};
 use cosmwasm::serde::{from_slice, to_vec};
-use cosmwasm::traits::Storage;
+use cosmwasm::traits::{ReadonlyStorage, Storage};
 
 pub fn typed<'a, S: Storage, T>(storage: &'a mut S) -> TypedStorage<'a, S, T>
 where
     T: Serialize + DeserializeOwned + NamedType,
 {
     TypedStorage::new(storage)
+}
+
+pub fn typed_read<'a, S: ReadonlyStorage, T>(storage: &'a S) -> ReadonlyTypedStorage<'a, S, T>
+where
+    T: Serialize + DeserializeOwned + NamedType,
+{
+    ReadonlyTypedStorage::new(storage)
 }
 
 pub struct TypedStorage<'a, S: Storage, T>
@@ -44,7 +51,7 @@ where
     }
 
     /// load will return an error if no data is set at the given key, or on parse error
-    pub fn load(&mut self, key: &[u8]) -> Result<T> {
+    pub fn load(&self, key: &[u8]) -> Result<T> {
         self.may_load(key)?.context(ContractErr {
             msg: "uninitialized data",
         })
@@ -52,7 +59,7 @@ where
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
     /// returns an error on issues parsing
-    pub fn may_load(&mut self, key: &[u8]) -> Result<Option<T>> {
+    pub fn may_load(&self, key: &[u8]) -> Result<Option<T>> {
         let bz = self.storage.get(key);
         match bz {
             Some(d) => from_slice(&d).context(ParseErr {
@@ -71,6 +78,46 @@ where
         let output = action(input)?;
         self.save(key, &output)?;
         Ok(output)
+    }
+}
+
+pub struct ReadonlyTypedStorage<'a, S: ReadonlyStorage, T>
+where
+    T: Serialize + DeserializeOwned + NamedType,
+{
+    storage: &'a S,
+    // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
+    data: PhantomData<&'a T>,
+}
+
+impl<'a, S: ReadonlyStorage, T> ReadonlyTypedStorage<'a, S, T>
+where
+    T: Serialize + DeserializeOwned + NamedType,
+{
+    pub fn new(storage: &'a S) -> Self {
+        ReadonlyTypedStorage {
+            storage,
+            data: PhantomData,
+        }
+    }
+
+    /// load will return an error if no data is set at the given key, or on parse error
+    pub fn load(&self, key: &[u8]) -> Result<T> {
+        self.may_load(key)?.context(ContractErr {
+            msg: "uninitialized data",
+        })
+    }
+
+    /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
+    /// returns an error on issues parsing
+    pub fn may_load(&self, key: &[u8]) -> Result<Option<T>> {
+        let bz = self.storage.get(key);
+        match bz {
+            Some(d) => from_slice(&d).context(ParseErr {
+                kind: T::short_type_name(),
+            }),
+            None => Ok(None),
+        }
     }
 }
 
@@ -105,6 +152,29 @@ mod test {
 
         // load it properly
         let loaded = bucket.load(b"maria").unwrap();
+        assert_eq!(data, loaded);
+    }
+
+    #[test]
+    fn readonly_works() {
+        let mut store = MockStorage::new();
+        let mut bucket = typed::<_, Data>(&mut store);
+
+        // save data
+        let data = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
+        bucket.save(b"maria", &data).unwrap();
+
+        let mut reader = typed_read::<_, Data>(&mut store);
+
+        // check empty data handling
+        assert!(reader.load(b"john").is_err());
+        assert_eq!(reader.may_load(b"john").unwrap(), None);
+
+        // load it properly
+        let loaded = reader.load(b"maria").unwrap();
         assert_eq!(data, loaded);
     }
 
