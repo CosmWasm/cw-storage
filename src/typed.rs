@@ -6,7 +6,6 @@ use std::marker::PhantomData;
 use cosmwasm::errors::{ContractErr, ParseErr, Result, SerializeErr};
 use cosmwasm::serde::{from_slice, to_vec};
 use cosmwasm::traits::Storage;
-use snafu::futures01::FutureExt;
 
 pub struct TypedStorage<'a, S: Storage, T>
 where
@@ -54,5 +53,37 @@ where
             }),
             None => Ok(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use cosmwasm::mock::MockStorage;
+    use serde::{Serialize, Deserialize};
+    use named_type_derive::NamedType;
+
+    #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug)]
+    struct Data {
+        pub name: String,
+        pub age: i32,
+    }
+
+    #[test]
+    fn store_and_load() {
+        let mut store = MockStorage::new();
+        let mut bucket = TypedStorage::<_, Data>::new(&mut store);
+
+        // check empty data handling
+        assert!(bucket.load(b"maria").is_err());
+        assert_eq!(bucket.may_load(b"maria").unwrap(), None);
+
+        // save data
+        let data = Data{name: "Maria".to_string(), age: 42};
+        bucket.save(b"maria", &data).unwrap();
+
+        // load it properly
+        let loaded = bucket.load(b"maria").unwrap();
+        assert_eq!(data, loaded);
     }
 }
