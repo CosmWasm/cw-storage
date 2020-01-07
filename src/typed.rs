@@ -7,14 +7,14 @@ use cosmwasm::errors::{ContractErr, ParseErr, Result, SerializeErr};
 use cosmwasm::serde::{from_slice, to_vec};
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
-pub fn typed<'a, S: Storage, T>(storage: &'a mut S) -> TypedStorage<'a, S, T>
+pub fn typed<S: Storage, T>(storage: &mut S) -> TypedStorage<S, T>
 where
     T: Serialize + DeserializeOwned + NamedType,
 {
     TypedStorage::new(storage)
 }
 
-pub fn typed_read<'a, S: ReadonlyStorage, T>(storage: &'a S) -> ReadonlyTypedStorage<'a, S, T>
+pub fn typed_read<S: ReadonlyStorage, T>(storage: &S) -> ReadonlyTypedStorage<S, T>
 where
     T: Serialize + DeserializeOwned + NamedType,
 {
@@ -167,7 +167,7 @@ mod test {
         };
         bucket.save(b"maria", &data).unwrap();
 
-        let mut reader = typed_read::<_, Data>(&mut store);
+        let reader = typed_read::<_, Data>(&mut store);
 
         // check empty data handling
         assert!(reader.load(b"john").is_err());
