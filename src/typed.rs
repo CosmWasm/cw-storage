@@ -128,6 +128,8 @@ mod test {
     use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
 
+    use crate::prefixed;
+
     #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug)]
     struct Data {
         pub name: String,
@@ -142,6 +144,24 @@ mod test {
         // check empty data handling
         assert!(bucket.load(b"maria").is_err());
         assert_eq!(bucket.may_load(b"maria").unwrap(), None);
+
+        // save data
+        let data = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
+        bucket.save(b"maria", &data).unwrap();
+
+        // load it properly
+        let loaded = bucket.load(b"maria").unwrap();
+        assert_eq!(data, loaded);
+    }
+
+    #[test]
+    fn store_with_prefix() {
+        let mut store = MockStorage::new();
+        let mut space = prefixed(b"data", &mut store);
+        let mut bucket = typed::<_, Data>(&mut space);
 
         // save data
         let data = Data {
@@ -191,12 +211,11 @@ mod test {
         bucket.save(b"maria", &init).unwrap();
 
         // it's my birthday
-        let output = bucket
-            .update(b"maria", &|mut d| {
-                d.age += 1;
-                Ok(d)
-            })
-            .unwrap();
+        let birthday = |mut d: Data| {
+            d.age += 1;
+            Ok(d)
+        };
+        let output = bucket.update(b"maria", &birthday).unwrap();
         let expected = Data {
             name: "Maria".to_string(),
             age: 43,
