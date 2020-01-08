@@ -145,6 +145,8 @@ mod test {
     use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
 
+    use cosmwasm::errors::{Error, Unauthorized};
+
     #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug)]
     struct Config {
         pub owner: String,
@@ -184,5 +186,47 @@ mod test {
 
         let other_reader = singleton_read::<_, Config>(&store, b"config2");
         assert_eq!(other_reader.may_load().unwrap(), None);
+    }
+
+    #[test]
+    fn update_success() {
+        let mut store = MockStorage::new();
+        let mut writer = singleton::<_, Config>(&mut store, b"config");
+
+        let cfg = Config {
+            owner: "admin".to_string(),
+            max_tokens: 1234,
+        };
+        writer.save(&cfg).unwrap();
+
+        let output = writer.update(&|mut c| {
+            c.max_tokens *= 2;
+            Ok(c)
+        });
+        let expected = Config {
+            owner: "admin".to_string(),
+            max_tokens: 2468,
+        };
+        assert_eq!(output.unwrap(), expected);
+        assert_eq!(writer.load().unwrap(), expected);
+    }
+
+    #[test]
+    fn update_failure() {
+        let mut store = MockStorage::new();
+        let mut writer = singleton::<_, Config>(&mut store, b"config");
+
+        let cfg = Config {
+            owner: "admin".to_string(),
+            max_tokens: 1234,
+        };
+        writer.save(&cfg).unwrap();
+
+        let output = writer.update(&|_c| Unauthorized {}.fail());
+        match output {
+            Err(Error::Unauthorized { .. }) => {}
+            _ => panic!("Unexpected output: {:?}", output),
+        }
+        assert_eq!(writer.load().unwrap(), cfg);
     }
 }
