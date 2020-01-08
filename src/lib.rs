@@ -1,4 +1,5 @@
 mod prefix;
+mod singleton;
 mod typed;
 
 pub use prefix::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPrefixedStorage};

@@ -85,7 +85,9 @@ impl<'a, T: Storage> Storage for PrefixedStorage<'a, T> {
 
 // Calculates the raw key prefix for a given namespace
 // as documented in https://github.com/webmaster128/key-namespacing#length-prefixed-keys
-fn key_prefix(namespace: &[u8]) -> Vec<u8> {
+//
+// This is pub(crate) for use in singleton
+pub(crate) fn key_prefix(namespace: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(namespace.len() + 2);
     extend_with_prefix(&mut out, namespace);
     out
