@@ -23,15 +23,34 @@ pub fn sequence<'a, S: Storage>(storage: &'a mut S, key: &[u8]) -> Singleton<'a,
 
 /// currval returns the last value returned by nextval. If the sequence has never been used,
 /// then it will return 0.
-pub fn currval<'a, S: Storage>(seq: &'a Singleton<'a, S, SeqVal>) -> Result<u64> {
+pub fn currval<S: Storage>(seq: &Singleton<S, SeqVal>) -> Result<u64> {
     let val = seq.may_load()?;
     Ok(val.unwrap_or_default().0)
 }
 
 /// nextval increments the counter by 1 and returns the new value.
 /// On the first time it is called (no sequence info in db) it will return 1.
-pub fn nextval<'a, S: Storage>(seq: &'a mut Singleton<'a, S, SeqVal>) -> Result<u64> {
+pub fn nextval<S: Storage>(seq: &mut Singleton<S, SeqVal>) -> Result<u64> {
     let val = currval(&seq)? + 1;
     seq.save(&SeqVal(val))?;
     Ok(val)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use cosmwasm::mock::MockStorage;
+
+    #[test]
+    fn walk_through_sequence() {
+        let mut store = MockStorage::new();
+        let mut seq = sequence(&mut store, b"seq");
+
+        assert_eq!(currval(&seq).unwrap(), 0);
+        assert_eq!(nextval(&mut seq).unwrap(), 1);
+        assert_eq!(nextval(&mut seq).unwrap(), 2);
+        assert_eq!(nextval(&mut seq).unwrap(), 3);
+        assert_eq!(currval(&seq).unwrap(), 3);
+        assert_eq!(currval(&seq).unwrap(), 3);
+    }
 }
