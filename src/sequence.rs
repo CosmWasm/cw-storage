@@ -53,4 +53,35 @@ mod test {
         assert_eq!(currval(&seq).unwrap(), 3);
         assert_eq!(currval(&seq).unwrap(), 3);
     }
+
+    #[test]
+    fn sequences_independent() {
+        let mut store = MockStorage::new();
+
+        let mut seq = sequence(&mut store, b"seq");
+        assert_eq!(nextval(&mut seq).unwrap(), 1);
+        assert_eq!(nextval(&mut seq).unwrap(), 2);
+        assert_eq!(nextval(&mut seq).unwrap(), 3);
+
+        let mut seq2 = sequence(&mut store, b"seq2");
+        assert_eq!(nextval(&mut seq2).unwrap(), 1);
+        assert_eq!(nextval(&mut seq2).unwrap(), 2);
+
+        let mut seq3 = sequence(&mut store, b"seq");
+        assert_eq!(nextval(&mut seq3).unwrap(), 4);
+    }
+
+    #[test]
+    fn set_sequence() {
+        let mut store = MockStorage::new();
+        let mut seq = sequence(&mut store, b"seq");
+
+        assert_eq!(nextval(&mut seq).unwrap(), 1);
+        assert_eq!(nextval(&mut seq).unwrap(), 2);
+
+        seq.save(&SeqVal(20)).unwrap();
+
+        assert_eq!(currval(&seq).unwrap(), 20);
+        assert_eq!(nextval(&mut seq).unwrap(), 21);
+    }
 }
