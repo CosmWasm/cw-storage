@@ -4,3 +4,4 @@ mod typed;
 
 pub use prefix::{prefixed, prefixed_read, PrefixedStorage, ReadonlyPrefixedStorage};
 pub use typed::{typed, typed_read, ReadonlyTypedStorage, TypedStorage};
+pub use singleton::{Singleton, ReadonlySingleton, singleton, singleton_read};
