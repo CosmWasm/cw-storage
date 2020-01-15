@@ -122,8 +122,8 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use cosmwasm::mock::MockStorage;
     use cosmwasm::errors::ContractErr;
+    use cosmwasm::mock::MockStorage;
     use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
 
