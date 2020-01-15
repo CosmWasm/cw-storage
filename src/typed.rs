@@ -3,7 +3,7 @@ use serde::{de::DeserializeOwned, ser::Serialize};
 use snafu::{OptionExt, ResultExt};
 use std::marker::PhantomData;
 
-use cosmwasm::errors::{ContractErr, ParseErr, Result, SerializeErr};
+use cosmwasm::errors::{NotFound, ParseErr, Result, SerializeErr};
 use cosmwasm::serde::{from_slice, to_vec};
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
@@ -52,9 +52,8 @@ where
 
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self, key: &[u8]) -> Result<T> {
-        // TODO: replace with NotFound with cosmwasm 0.6.1
-        self.may_load(key)?.context(ContractErr {
-            msg: "uninitialized data",
+        self.may_load(key)?.context(NotFound {
+            kind: T::short_type_name(),
         })
     }
 
@@ -103,9 +102,8 @@ where
 
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self, key: &[u8]) -> Result<T> {
-        // TODO: replace with NotFound with cosmwasm 0.6.1
-        self.may_load(key)?.context(ContractErr {
-            msg: "uninitialized data",
+        self.may_load(key)?.context(NotFound {
+            kind: T::short_type_name(),
         })
     }
 
@@ -125,6 +123,7 @@ where
 mod test {
     use super::*;
     use cosmwasm::mock::MockStorage;
+    use cosmwasm::errors::ContractErr;
     use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
 
