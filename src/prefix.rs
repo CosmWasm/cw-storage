@@ -1,6 +1,6 @@
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
-use crate::namespace_helpers::{key_prefix, key_prefix_nested};
+use crate::namespace_helpers::{get_with_prefix, key_prefix, key_prefix_nested, set_with_prefix};
 
 // prefixed_read is a helper function for less verbose usage
 pub fn prefixed_read<'a, T: ReadonlyStorage>(
@@ -40,9 +40,7 @@ impl<'a, T: ReadonlyStorage> ReadonlyPrefixedStorage<'a, T> {
 
 impl<'a, T: ReadonlyStorage> ReadonlyStorage for ReadonlyPrefixedStorage<'a, T> {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-        let mut k = self.prefix.clone();
-        k.extend_from_slice(key);
-        self.storage.get(&k)
+        get_with_prefix(self.storage, &self.prefix, key)
     }
 }
 
@@ -71,17 +69,13 @@ impl<'a, T: Storage> PrefixedStorage<'a, T> {
 
 impl<'a, T: Storage> ReadonlyStorage for PrefixedStorage<'a, T> {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-        let mut k = self.prefix.clone();
-        k.extend_from_slice(key);
-        self.storage.get(&k)
+        get_with_prefix(self.storage, &self.prefix, key)
     }
 }
 
 impl<'a, T: Storage> Storage for PrefixedStorage<'a, T> {
     fn set(&mut self, key: &[u8], value: &[u8]) {
-        let mut k = self.prefix.clone();
-        k.extend_from_slice(key);
-        self.storage.set(&k, value)
+        set_with_prefix(self.storage, &self.prefix, key, value)
     }
 }
 

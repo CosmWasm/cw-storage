@@ -1,3 +1,26 @@
+use cosmwasm::traits::{ReadonlyStorage, Storage};
+
+pub(crate) fn get_with_prefix<S: ReadonlyStorage>(
+    storage: &S,
+    namespace: &[u8],
+    key: &[u8],
+) -> Option<Vec<u8>> {
+    let mut k = namespace.to_vec();
+    k.extend_from_slice(key);
+    storage.get(&k)
+}
+
+pub(crate) fn set_with_prefix<S: Storage>(
+    storage: &mut S,
+    namespace: &[u8],
+    key: &[u8],
+    value: &[u8],
+) {
+    let mut k = namespace.to_vec();
+    k.extend_from_slice(key);
+    storage.set(&k, value)
+}
+
 // Calculates the raw key prefix for a given namespace
 // as documented in https://github.com/webmaster128/key-namespacing#length-prefixed-keys
 pub(crate) fn key_prefix(namespace: &[u8]) -> Vec<u8> {
@@ -40,6 +63,7 @@ fn key_len(prefix: &[u8]) -> [u8; 2] {
 #[cfg(test)]
 mod test {
     use super::*;
+    use cosmwasm::mock::MockStorage;
 
     #[test]
     fn key_prefix_works() {
@@ -87,5 +111,21 @@ mod test {
             key_prefix_nested(&[b"a", b"ab", b"abc"]),
             b"\x00\x01a\x00\x02ab\x00\x03abc"
         );
+    }
+
+    #[test]
+    fn prefix_get_set() {
+        let mut storage = MockStorage::new();
+        let prefix = key_prefix(b"foo");
+
+        // we use a block scope here to release the &mut before we use it in the next storage
+        set_with_prefix(&mut storage, &prefix, b"bar", b"gotcha");
+        let rfoo = get_with_prefix(&storage, &prefix, b"bar");
+        assert_eq!(Some(b"gotcha".to_vec()), rfoo);
+
+        // no collisions with other prefixes
+        let other_prefix = key_prefix(b"fo");
+        let collision = get_with_prefix(&storage, &other_prefix, b"obar");
+        assert_eq!(None, collision);
     }
 }
