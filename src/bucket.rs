@@ -129,3 +129,166 @@ where
         may_deserialize(&value)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use cosmwasm::errors::ContractErr;
+    use cosmwasm::mock::MockStorage;
+    use named_type_derive::NamedType;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug)]
+    struct Data {
+        pub name: String,
+        pub age: i32,
+    }
+
+    #[test]
+    fn store_and_load() {
+        let mut store = MockStorage::new();
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
+
+        // save data
+        let data = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
+        bucket.save(b"maria", &data).unwrap();
+
+        // load it properly
+        let loaded = bucket.load(b"maria").unwrap();
+        assert_eq!(data, loaded);
+    }
+
+    #[test]
+    fn readonly_works() {
+        let mut store = MockStorage::new();
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
+
+        // save data
+        let data = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
+        bucket.save(b"maria", &data).unwrap();
+
+        let reader = bucket_read::<_, Data>(b"data", &mut store);
+
+        // check empty data handling
+        assert!(reader.load(b"john").is_err());
+        assert_eq!(reader.may_load(b"john").unwrap(), None);
+
+        // load it properly
+        let loaded = reader.load(b"maria").unwrap();
+        assert_eq!(data, loaded);
+    }
+
+    #[test]
+    fn buckets_isolated() {
+        let mut store = MockStorage::new();
+        let mut bucket1 = bucket::<_, Data>(b"data", &mut store);
+
+        // save data
+        let data = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
+        bucket1.save(b"maria", &data).unwrap();
+
+        let mut bucket2 = bucket::<_, Data>(b"dat", &mut store);
+
+        // save data (dat, amaria) vs (data, maria)
+        let data2 = Data {
+            name: "Amen".to_string(),
+            age: 67,
+        };
+        bucket2.save(b"amaria", &data2).unwrap();
+
+        // load one
+        let reader = bucket_read::<_, Data>(b"data", &store);
+        let loaded = reader.load(b"maria").unwrap();
+        assert_eq!(data, loaded);
+        // no cross load
+        assert_eq!(None, reader.may_load(b"amaria").unwrap());
+
+        // load the other
+        let reader2 = bucket_read::<_, Data>(b"dat", &store);
+        let loaded2 = reader2.load(b"amaria").unwrap();
+        assert_eq!(data2, loaded2);
+        // no cross load
+        assert_eq!(None, reader2.may_load(b"maria").unwrap());
+    }
+
+    #[test]
+    fn update_success() {
+        let mut store = MockStorage::new();
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
+
+        // initial data
+        let init = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
+        bucket.save(b"maria", &init).unwrap();
+
+        // it's my birthday
+        let birthday = |mut d: Data| {
+            d.age += 1;
+            Ok(d)
+        };
+        let output = bucket.update(b"maria", &birthday).unwrap();
+        let expected = Data {
+            name: "Maria".to_string(),
+            age: 43,
+        };
+        assert_eq!(output, expected);
+
+        // load it properly
+        let loaded = bucket.load(b"maria").unwrap();
+        assert_eq!(loaded, expected);
+    }
+
+    #[test]
+    fn update_fails_on_error() {
+        let mut store = MockStorage::new();
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
+
+        // initial data
+        let init = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
+        bucket.save(b"maria", &init).unwrap();
+
+        // it's my birthday
+        let output = bucket.update(b"maria", &|_d| {
+            ContractErr {
+                msg: "cuz i feel like it",
+            }
+            .fail()
+        });
+        assert!(output.is_err());
+
+        // load it properly
+        let loaded = bucket.load(b"maria").unwrap();
+        assert_eq!(loaded, init);
+    }
+
+    #[test]
+    fn update_fails_on_no_data() {
+        let mut store = MockStorage::new();
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
+
+        // it's my birthday
+        let output = bucket.update(b"maria", &|mut d| {
+            d.age += 1;
+            Ok(d)
+        });
+        assert!(output.is_err());
+
+        // nothing stored
+        let loaded = bucket.may_load(b"maria").unwrap();
+        assert_eq!(loaded, None);
+    }
+}
