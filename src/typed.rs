@@ -1,11 +1,11 @@
 use named_type::NamedType;
 use serde::{de::DeserializeOwned, ser::Serialize};
-use snafu::{OptionExt, ResultExt};
 use std::marker::PhantomData;
 
-use cosmwasm::errors::{NotFound, ParseErr, Result, SerializeErr};
-use cosmwasm::serde::{from_slice, to_vec};
+use cosmwasm::errors::Result;
 use cosmwasm::traits::{ReadonlyStorage, Storage};
+
+use crate::type_helpers::{deserialize, may_deserialize, serialize};
 
 pub fn typed<S: Storage, T>(storage: &mut S) -> TypedStorage<S, T>
 where
@@ -43,29 +43,21 @@ where
 
     /// save will serialize the model and store, returns an error on serialization issues
     pub fn save(&mut self, key: &[u8], data: &T) -> Result<()> {
-        let bz = to_vec(data).context(SerializeErr {
-            kind: T::short_type_name(),
-        })?;
-        self.storage.set(key, &bz);
+        self.storage.set(key, &serialize(data)?);
         Ok(())
     }
 
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self, key: &[u8]) -> Result<T> {
-        self.may_load(key)?.context(NotFound {
-            kind: T::short_type_name(),
-        })
+        let value = self.storage.get(key);
+        deserialize(&value)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
     /// returns an error on issues parsing
     pub fn may_load(&self, key: &[u8]) -> Result<Option<T>> {
-        match self.storage.get(key) {
-            Some(d) => from_slice(&d).context(ParseErr {
-                kind: T::short_type_name(),
-            }),
-            None => Ok(None),
-        }
+        let value = self.storage.get(key);
+        may_deserialize(&value)
     }
 
     /// update will load the data, perform the specified action, and store the result
@@ -102,20 +94,15 @@ where
 
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self, key: &[u8]) -> Result<T> {
-        self.may_load(key)?.context(NotFound {
-            kind: T::short_type_name(),
-        })
+        let value = self.storage.get(key);
+        deserialize(&value)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
     /// returns an error on issues parsing
     pub fn may_load(&self, key: &[u8]) -> Result<Option<T>> {
-        match self.storage.get(key) {
-            Some(d) => from_slice(&d).context(ParseErr {
-                kind: T::short_type_name(),
-            }),
-            None => Ok(None),
-        }
+        let value = self.storage.get(key);
+        may_deserialize(&value)
     }
 }
 

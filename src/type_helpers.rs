@@ -43,6 +43,7 @@ pub fn deserialize<T: DeserializeOwned + NamedType>(value: &Option<Vec<u8>>) -> 
 #[cfg(test)]
 mod test {
     use super::*;
+    use cosmwasm::errors::Error;
     use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
 
@@ -69,5 +70,18 @@ mod test {
 
         let may_parse: Option<Data> = may_deserialize(&loaded).unwrap();
         assert_eq!(may_parse, Some(data));
+    }
+
+    #[test]
+    fn handle_none() {
+        let may_parse = may_deserialize::<Data>(&None).unwrap();
+        assert_eq!(may_parse, None);
+
+        let parsed = deserialize::<Data>(&None);
+        match parsed {
+            Err(Error::NotFound { kind }) => assert_eq!(kind, "Data"),
+            Err(e) => panic!("Unexpected error {}", e),
+            Ok(_) => panic!("should error"),
+        }
     }
 }
