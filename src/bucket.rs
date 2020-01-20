@@ -6,7 +6,7 @@ use cosmwasm::errors::Result;
 use cosmwasm::traits::Storage;
 
 use crate::namespace_helpers::{get_with_prefix, key_prefix, key_prefix_nested, set_with_prefix};
-use crate::type_helpers::{deserialize, may_deserialize, serialize};
+use crate::type_helpers::{may_deserialize, must_deserialize, serialize};
 
 pub fn bucket<'a, S: Storage, T>(namespace: &[u8], storage: &'a mut S) -> Bucket<'a, S, T>
 where
@@ -54,7 +54,7 @@ where
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self, key: &[u8]) -> Result<T> {
         let value = get_with_prefix(self.storage, &self.prefix, key);
-        deserialize(&value)
+        must_deserialize(&value)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.

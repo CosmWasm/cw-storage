@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use cosmwasm::errors::Result;
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
-use crate::type_helpers::{deserialize, may_deserialize, serialize};
+use crate::type_helpers::{may_deserialize, must_deserialize, serialize};
 
 pub fn typed<S: Storage, T>(storage: &mut S) -> TypedStorage<S, T>
 where
@@ -50,7 +50,7 @@ where
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self, key: &[u8]) -> Result<T> {
         let value = self.storage.get(key);
-        deserialize(&value)
+        must_deserialize(&value)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
@@ -95,7 +95,7 @@ where
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self, key: &[u8]) -> Result<T> {
         let value = self.storage.get(key);
-        deserialize(&value)
+        must_deserialize(&value)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.

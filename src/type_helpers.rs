@@ -16,28 +16,33 @@ pub fn serialize<T: Serialize + NamedType>(data: &T) -> Result<Vec<u8>> {
 ///
 /// value is an odd type, but this is meant to be easy to use with output from storage.get (Option<Vec<u8>>)
 /// and value.map(|s| s.as_slice()) seems trickier than &value
-pub fn may_deserialize<T: DeserializeOwned + NamedType>(
+pub(crate) fn may_deserialize<T: DeserializeOwned + NamedType>(
     value: &Option<Vec<u8>>,
 ) -> Result<Option<T>> {
     match value {
-        Some(d) => from_slice(d).context(ParseErr {
-            kind: T::short_type_name(),
-        }),
+        Some(d) => deserialize(d.as_slice()),
         None => Ok(None),
     }
 }
 
-/// deserialize parses json bytes from storage (Option), returning NotFound error if no data present
-pub fn deserialize<T: DeserializeOwned + NamedType>(value: &Option<Vec<u8>>) -> Result<T> {
+/// must_deserialize parses json bytes from storage (Option), returning NotFound error if no data present
+pub(crate) fn must_deserialize<T: DeserializeOwned + NamedType>(
+    value: &Option<Vec<u8>>,
+) -> Result<T> {
     match value {
-        Some(d) => from_slice(d).context(ParseErr {
-            kind: T::short_type_name(),
-        }),
+        Some(d) => deserialize(&d),
         None => NotFound {
             kind: T::short_type_name(),
         }
         .fail(),
     }
+}
+
+// deserialize is a reflection of serialize and probably what most people outside the crate expect
+pub fn deserialize<T: DeserializeOwned + NamedType>(value: &[u8]) -> Result<T> {
+    from_slice(value).context(ParseErr {
+        kind: T::short_type_name(),
+    })
 }
 
 #[cfg(test)]
@@ -65,7 +70,7 @@ mod test {
 
         //        let parsed: Data = deserialize(loaded.map(|s| s.as_slice())).unwrap();
         //        assert_eq!(parsed, data);
-        let parsed: Data = deserialize(&loaded).unwrap();
+        let parsed: Data = must_deserialize(&loaded).unwrap();
         assert_eq!(parsed, data);
 
         let may_parse: Option<Data> = may_deserialize(&loaded).unwrap();
@@ -77,7 +82,7 @@ mod test {
         let may_parse = may_deserialize::<Data>(&None).unwrap();
         assert_eq!(may_parse, None);
 
-        let parsed = deserialize::<Data>(&None);
+        let parsed = must_deserialize::<Data>(&None);
         match parsed {
             Err(Error::NotFound { kind }) => assert_eq!(kind, "Data"),
             Err(e) => panic!("Unexpected error {}", e),

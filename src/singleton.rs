@@ -6,7 +6,7 @@ use cosmwasm::errors::Result;
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
 use crate::namespace_helpers::key_prefix;
-use crate::type_helpers::{deserialize, may_deserialize, serialize};
+use crate::type_helpers::{may_deserialize, must_deserialize, serialize};
 
 // singleton is a helper function for less verbose usage
 pub fn singleton<'a, S: Storage, T>(storage: &'a mut S, key: &[u8]) -> Singleton<'a, S, T>
@@ -62,7 +62,7 @@ where
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self) -> Result<T> {
         let value = self.storage.get(&self.key);
-        deserialize(&value)
+        must_deserialize(&value)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
@@ -111,7 +111,7 @@ where
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self) -> Result<T> {
         let value = self.storage.get(&self.key);
-        deserialize(&value)
+        must_deserialize(&value)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
