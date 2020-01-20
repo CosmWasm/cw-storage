@@ -7,7 +7,7 @@ use cosmwasm::errors::{NotFound, ParseErr, Result, SerializeErr};
 use cosmwasm::serde::{from_slice, to_vec};
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
-use crate::prefix::key_prefix;
+use crate::namespace_helpers::key_prefix;
 
 // singleton is a helper function for less verbose usage
 pub fn singleton<'a, S: Storage, T>(storage: &'a mut S, key: &[u8]) -> Singleton<'a, S, T>

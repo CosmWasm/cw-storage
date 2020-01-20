@@ -1,3 +1,5 @@
+mod bucket;
+mod namespace_helpers;
 mod prefix;
 mod sequence;
 mod singleton;
