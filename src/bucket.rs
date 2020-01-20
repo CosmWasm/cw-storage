@@ -5,37 +5,51 @@ use std::marker::PhantomData;
 use cosmwasm::errors::Result;
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
+use crate::namespace_helpers::{get_with_prefix, key_prefix, key_prefix_nested, set_with_prefix};
 use crate::type_helpers::{may_deserialize, must_deserialize, serialize};
 
-pub fn typed<S: Storage, T>(storage: &mut S) -> TypedStorage<S, T>
+pub fn bucket<'a, S: Storage, T>(namespace: &[u8], storage: &'a mut S) -> Bucket<'a, S, T>
 where
     T: Serialize + DeserializeOwned + NamedType,
 {
-    TypedStorage::new(storage)
+    Bucket::new(namespace, storage)
 }
 
-pub fn typed_read<S: ReadonlyStorage, T>(storage: &S) -> ReadonlyTypedStorage<S, T>
+pub fn bucket_read<'a, S: ReadonlyStorage, T>(
+    namespace: &[u8],
+    storage: &'a S,
+) -> ReadonlyBucket<'a, S, T>
 where
     T: Serialize + DeserializeOwned + NamedType,
 {
-    ReadonlyTypedStorage::new(storage)
+    ReadonlyBucket::new(namespace, storage)
 }
 
-pub struct TypedStorage<'a, S: Storage, T>
+pub struct Bucket<'a, S: Storage, T>
 where
     T: Serialize + DeserializeOwned + NamedType,
 {
     storage: &'a mut S,
     // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
     data: PhantomData<&'a T>,
+    prefix: Vec<u8>,
 }
 
-impl<'a, S: Storage, T> TypedStorage<'a, S, T>
+impl<'a, S: Storage, T> Bucket<'a, S, T>
 where
     T: Serialize + DeserializeOwned + NamedType,
 {
-    pub fn new(storage: &'a mut S) -> Self {
-        TypedStorage {
+    pub fn new(namespace: &[u8], storage: &'a mut S) -> Self {
+        Bucket {
+            prefix: key_prefix(namespace),
+            storage,
+            data: PhantomData,
+        }
+    }
+
+    pub fn multilevel(namespaces: &[&[u8]], storage: &'a mut S) -> Self {
+        Bucket {
+            prefix: key_prefix_nested(namespaces),
             storage,
             data: PhantomData,
         }
@@ -43,20 +57,20 @@ where
 
     /// save will serialize the model and store, returns an error on serialization issues
     pub fn save(&mut self, key: &[u8], data: &T) -> Result<()> {
-        self.storage.set(key, &serialize(data)?);
+        set_with_prefix(self.storage, &self.prefix, key, &serialize(data)?);
         Ok(())
     }
 
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self, key: &[u8]) -> Result<T> {
-        let value = self.storage.get(key);
+        let value = get_with_prefix(self.storage, &self.prefix, key);
         must_deserialize(&value)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
     /// returns an error on issues parsing
     pub fn may_load(&self, key: &[u8]) -> Result<Option<T>> {
-        let value = self.storage.get(key);
+        let value = get_with_prefix(self.storage, &self.prefix, key);
         may_deserialize(&value)
     }
 
@@ -72,21 +86,31 @@ where
     }
 }
 
-pub struct ReadonlyTypedStorage<'a, S: ReadonlyStorage, T>
+pub struct ReadonlyBucket<'a, S: ReadonlyStorage, T>
 where
     T: Serialize + DeserializeOwned + NamedType,
 {
     storage: &'a S,
     // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
     data: PhantomData<&'a T>,
+    prefix: Vec<u8>,
 }
 
-impl<'a, S: ReadonlyStorage, T> ReadonlyTypedStorage<'a, S, T>
+impl<'a, S: ReadonlyStorage, T> ReadonlyBucket<'a, S, T>
 where
     T: Serialize + DeserializeOwned + NamedType,
 {
-    pub fn new(storage: &'a S) -> Self {
-        ReadonlyTypedStorage {
+    pub fn new(namespace: &[u8], storage: &'a S) -> Self {
+        ReadonlyBucket {
+            prefix: key_prefix(namespace),
+            storage,
+            data: PhantomData,
+        }
+    }
+
+    pub fn multilevel(namespaces: &[&[u8]], storage: &'a S) -> Self {
+        ReadonlyBucket {
+            prefix: key_prefix_nested(namespaces),
             storage,
             data: PhantomData,
         }
@@ -94,14 +118,14 @@ where
 
     /// load will return an error if no data is set at the given key, or on parse error
     pub fn load(&self, key: &[u8]) -> Result<T> {
-        let value = self.storage.get(key);
+        let value = get_with_prefix(self.storage, &self.prefix, key);
         must_deserialize(&value)
     }
 
     /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
     /// returns an error on issues parsing
     pub fn may_load(&self, key: &[u8]) -> Result<Option<T>> {
-        let value = self.storage.get(key);
+        let value = get_with_prefix(self.storage, &self.prefix, key);
         may_deserialize(&value)
     }
 }
@@ -114,8 +138,6 @@ mod test {
     use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
 
-    use crate::prefixed;
-
     #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug)]
     struct Data {
         pub name: String,
@@ -125,29 +147,7 @@ mod test {
     #[test]
     fn store_and_load() {
         let mut store = MockStorage::new();
-        let mut bucket = TypedStorage::<_, Data>::new(&mut store);
-
-        // check empty data handling
-        assert!(bucket.load(b"maria").is_err());
-        assert_eq!(bucket.may_load(b"maria").unwrap(), None);
-
-        // save data
-        let data = Data {
-            name: "Maria".to_string(),
-            age: 42,
-        };
-        bucket.save(b"maria", &data).unwrap();
-
-        // load it properly
-        let loaded = bucket.load(b"maria").unwrap();
-        assert_eq!(data, loaded);
-    }
-
-    #[test]
-    fn store_with_prefix() {
-        let mut store = MockStorage::new();
-        let mut space = prefixed(b"data", &mut store);
-        let mut bucket = typed::<_, Data>(&mut space);
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
 
         // save data
         let data = Data {
@@ -164,7 +164,7 @@ mod test {
     #[test]
     fn readonly_works() {
         let mut store = MockStorage::new();
-        let mut bucket = typed::<_, Data>(&mut store);
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
 
         // save data
         let data = Data {
@@ -173,7 +173,7 @@ mod test {
         };
         bucket.save(b"maria", &data).unwrap();
 
-        let reader = typed_read::<_, Data>(&mut store);
+        let reader = bucket_read::<_, Data>(b"data", &mut store);
 
         // check empty data handling
         assert!(reader.load(b"john").is_err());
@@ -185,9 +185,45 @@ mod test {
     }
 
     #[test]
+    fn buckets_isolated() {
+        let mut store = MockStorage::new();
+        let mut bucket1 = bucket::<_, Data>(b"data", &mut store);
+
+        // save data
+        let data = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
+        bucket1.save(b"maria", &data).unwrap();
+
+        let mut bucket2 = bucket::<_, Data>(b"dat", &mut store);
+
+        // save data (dat, amaria) vs (data, maria)
+        let data2 = Data {
+            name: "Amen".to_string(),
+            age: 67,
+        };
+        bucket2.save(b"amaria", &data2).unwrap();
+
+        // load one
+        let reader = bucket_read::<_, Data>(b"data", &store);
+        let loaded = reader.load(b"maria").unwrap();
+        assert_eq!(data, loaded);
+        // no cross load
+        assert_eq!(None, reader.may_load(b"amaria").unwrap());
+
+        // load the other
+        let reader2 = bucket_read::<_, Data>(b"dat", &store);
+        let loaded2 = reader2.load(b"amaria").unwrap();
+        assert_eq!(data2, loaded2);
+        // no cross load
+        assert_eq!(None, reader2.may_load(b"maria").unwrap());
+    }
+
+    #[test]
     fn update_success() {
         let mut store = MockStorage::new();
-        let mut bucket = typed::<_, Data>(&mut store);
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
 
         // initial data
         let init = Data {
@@ -216,7 +252,7 @@ mod test {
     #[test]
     fn update_fails_on_error() {
         let mut store = MockStorage::new();
-        let mut bucket = typed::<_, Data>(&mut store);
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
 
         // initial data
         let init = Data {
@@ -242,7 +278,7 @@ mod test {
     #[test]
     fn update_fails_on_no_data() {
         let mut store = MockStorage::new();
-        let mut bucket = typed::<_, Data>(&mut store);
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
 
         // it's my birthday
         let output = bucket.update(b"maria", &|mut d| {
