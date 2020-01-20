@@ -20,7 +20,7 @@ pub(crate) fn may_deserialize<T: DeserializeOwned + NamedType>(
     value: &Option<Vec<u8>>,
 ) -> Result<Option<T>> {
     match value {
-        Some(d) => deserialize(d.as_slice()),
+        Some(d) => Ok(Some(deserialize(d.as_slice())?)),
         None => Ok(None),
     }
 }

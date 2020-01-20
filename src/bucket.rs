@@ -3,7 +3,7 @@ use serde::{de::DeserializeOwned, ser::Serialize};
 use std::marker::PhantomData;
 
 use cosmwasm::errors::Result;
-use cosmwasm::traits::Storage;
+use cosmwasm::traits::{ReadonlyStorage, Storage};
 
 use crate::namespace_helpers::{get_with_prefix, key_prefix, key_prefix_nested, set_with_prefix};
 use crate::type_helpers::{may_deserialize, must_deserialize, serialize};
@@ -13,6 +13,16 @@ where
     T: Serialize + DeserializeOwned + NamedType,
 {
     Bucket::new(namespace, storage)
+}
+
+pub fn bucket_read<'a, S: ReadonlyStorage, T>(
+    namespace: &[u8],
+    storage: &'a S,
+) -> ReadonlyBucket<'a, S, T>
+where
+    T: Serialize + DeserializeOwned + NamedType,
+{
+    ReadonlyBucket::new(namespace, storage)
 }
 
 pub struct Bucket<'a, S: Storage, T>
@@ -73,5 +83,49 @@ where
         let output = action(input)?;
         self.save(key, &output)?;
         Ok(output)
+    }
+}
+
+pub struct ReadonlyBucket<'a, S: ReadonlyStorage, T>
+where
+    T: Serialize + DeserializeOwned + NamedType,
+{
+    storage: &'a S,
+    // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
+    data: PhantomData<&'a T>,
+    prefix: Vec<u8>,
+}
+
+impl<'a, S: ReadonlyStorage, T> ReadonlyBucket<'a, S, T>
+where
+    T: Serialize + DeserializeOwned + NamedType,
+{
+    pub fn new(namespace: &[u8], storage: &'a S) -> Self {
+        ReadonlyBucket {
+            prefix: key_prefix(namespace),
+            storage,
+            data: PhantomData,
+        }
+    }
+
+    pub fn multilevel(namespaces: &[&[u8]], storage: &'a S) -> Self {
+        ReadonlyBucket {
+            prefix: key_prefix_nested(namespaces),
+            storage,
+            data: PhantomData,
+        }
+    }
+
+    /// load will return an error if no data is set at the given key, or on parse error
+    pub fn load(&self, key: &[u8]) -> Result<T> {
+        let value = get_with_prefix(self.storage, &self.prefix, key);
+        must_deserialize(&value)
+    }
+
+    /// may_load will parse the data stored at the key if present, returns Ok(None) if no data there.
+    /// returns an error on issues parsing
+    pub fn may_load(&self, key: &[u8]) -> Result<Option<T>> {
+        let value = get_with_prefix(self.storage, &self.prefix, key);
+        may_deserialize(&value)
     }
 }
