@@ -4,10 +4,15 @@ use snafu::ResultExt;
 use cosmwasm::errors::{NotFound, ParseErr, Result, SerializeErr};
 use cosmwasm::serde::{from_slice, to_vec};
 
+pub fn short_type_name<T>() -> &'static str {
+    let long = std::any::type_name::<T>();
+    long.rsplit("::").next().unwrap_or(long)
+}
+
 /// serialize makes json bytes, but returns a cosmwasm::Error
 pub fn serialize<T: Serialize>(data: &T) -> Result<Vec<u8>> {
     to_vec(data).context(SerializeErr {
-        kind: T::type_name(),
+        kind: short_type_name::<T>(),
     })
 }
 
@@ -27,7 +32,7 @@ pub(crate) fn must_deserialize<T: DeserializeOwned>(value: &Option<Vec<u8>>) -> 
     match value {
         Some(d) => deserialize(&d),
         None => NotFound {
-            kind: T::type_name(),
+            kind: short_type_name::<T>(),
         }
         .fail(),
     }
@@ -36,7 +41,7 @@ pub(crate) fn must_deserialize<T: DeserializeOwned>(value: &Option<Vec<u8>>) -> 
 // deserialize is a reflection of serialize and probably what most people outside the crate expect
 pub fn deserialize<T: DeserializeOwned>(value: &[u8]) -> Result<T> {
     from_slice(value).context(ParseErr {
-        kind: T::type_name(),
+        kind: short_type_name::<T>(),
     })
 }
 
