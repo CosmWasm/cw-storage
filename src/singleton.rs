@@ -1,4 +1,3 @@
-use named_type::NamedType;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use std::marker::PhantomData;
 
@@ -11,7 +10,7 @@ use crate::type_helpers::{may_deserialize, must_deserialize, serialize};
 // singleton is a helper function for less verbose usage
 pub fn singleton<'a, S: Storage, T>(storage: &'a mut S, key: &[u8]) -> Singleton<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     Singleton::new(storage, key)
 }
@@ -22,7 +21,7 @@ pub fn singleton_read<'a, S: ReadonlyStorage, T>(
     key: &[u8],
 ) -> ReadonlySingleton<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     ReadonlySingleton::new(storage, key)
 }
@@ -33,7 +32,7 @@ where
 /// TypedStorage accessors, without requiring a key (which is defined in the constructor)
 pub struct Singleton<'a, S: Storage, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     storage: &'a mut S,
     key: Vec<u8>,
@@ -43,7 +42,7 @@ where
 
 impl<'a, S: Storage, T> Singleton<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     pub fn new(storage: &'a mut S, key: &[u8]) -> Self {
         Singleton {
@@ -88,7 +87,7 @@ where
 /// methods of Singleton that don't modify state.
 pub struct ReadonlySingleton<'a, S: ReadonlyStorage, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     storage: &'a S,
     key: Vec<u8>,
@@ -98,7 +97,7 @@ where
 
 impl<'a, S: ReadonlyStorage, T> ReadonlySingleton<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     pub fn new(storage: &'a S, key: &[u8]) -> Self {
         ReadonlySingleton {
@@ -126,12 +125,11 @@ where
 mod test {
     use super::*;
     use cosmwasm::mock::MockStorage;
-    use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
 
     use cosmwasm::errors::{Error, Unauthorized};
 
-    #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug)]
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct Config {
         pub owner: String,
         pub max_tokens: i32,

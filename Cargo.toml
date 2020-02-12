@@ -18,5 +18,3 @@ cosmwasm = "~0.6.1"
 serde = { version = "~1.0.103", default-features = false, features = ["derive", "alloc"] }
 snafu = { version = "~0.5.0", default-features = false, features = ["rust_1_30"] }
 schemars = "~0.5"
-named_type = "=0.2.1"
-named_type_derive = "=0.2.1"
