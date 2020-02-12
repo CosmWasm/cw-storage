@@ -75,13 +75,33 @@ where
     }
 
     /// update will load the data, perform the specified action, and store the result
-    /// in the database. This is shorthand for some common sequences, which may be useful
+    /// in the database. This is shorthand for some common sequences, which may be useful.
+    /// Note that this only updates *pre-existing* values. If you want to modify possibly
+    /// non-existent values, please use `may_update`
     ///
     /// This is the least stable of the APIs, and definitely needs some usage
     pub fn update(&mut self, key: &[u8], action: &dyn Fn(T) -> Result<T>) -> Result<T> {
         let input = self.load(key)?;
         let output = action(input)?;
         self.save(key, &output)?;
+        Ok(output)
+    }
+
+    /// may_update is like update, but can handle missing values:
+    /// * If there is no data at this key, the input is None
+    /// * We don't save data if the action returns None
+    ///
+    /// This is the least stable of the APIs, and definitely needs some usage
+    pub fn may_update(
+        &mut self,
+        key: &[u8],
+        action: &dyn Fn(Option<T>) -> Result<Option<T>>,
+    ) -> Result<Option<T>> {
+        let input = self.may_load(key)?;
+        let output = action(input)?;
+        if let Some(data) = &output {
+            self.save(key, data)?;
+        }
         Ok(output)
     }
 }
@@ -290,5 +310,46 @@ mod test {
         // nothing stored
         let loaded = bucket.may_load(b"maria").unwrap();
         assert_eq!(loaded, None);
+    }
+
+    #[test]
+    fn may_update_handles_none() {
+        let mut store = MockStorage::new();
+        let mut bucket = bucket::<_, Data>(b"data", &mut store);
+
+        // only set first time
+        let val = bucket
+            .may_update(b"first", &|t| match t {
+                Some(_) => Ok(None),
+                None => Ok(Some(Data {
+                    name: "Maria".to_string(),
+                    age: 42,
+                })),
+            })
+            .unwrap();
+        assert!(val.is_some());
+
+        // ensure we get the data
+        let loaded = bucket.load(b"first").unwrap();
+        assert_eq!(loaded.age, 42);
+        assert_eq!(loaded.name.as_str(), "Maria");
+
+        // update with same function (don't change set values)
+        // only set first time
+        let val = bucket
+            .may_update(b"first", &|t| match t {
+                Some(_) => Ok(None),
+                None => Ok(Some(Data {
+                    name: "Joe".to_string(),
+                    age: 27,
+                })),
+            })
+            .unwrap();
+        assert!(val.is_none());
+
+        // ensure data was not modified
+        let loaded = bucket.load(b"first").unwrap();
+        assert_eq!(loaded.age, 42);
+        assert_eq!(loaded.name.as_str(), "Maria");
     }
 }
