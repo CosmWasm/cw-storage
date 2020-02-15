@@ -86,7 +86,9 @@ mod test {
         let parsed = must_deserialize::<Data>(&None);
         match parsed {
             // if we used short_type_name, this would just be Data
-            Err(Error::NotFound { kind }) => assert_eq!(kind, "cw_storage::type_helpers::test::Data"),
+            Err(Error::NotFound { kind }) => {
+                assert_eq!(kind, "cw_storage::type_helpers::test::Data")
+            }
             Err(e) => panic!("Unexpected error {}", e),
             Ok(_) => panic!("should error"),
         }
