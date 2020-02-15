@@ -153,10 +153,16 @@ pub struct Config {
 
 fn initialize() -> Result<()> {
     let mut store = MockStorage::new();
-    singleton(&mut store, b"config").save(&Config{
+    let config = singleton(&mut store, b"config");
+    config.save(&Config{
         purchase_price: Some(coin("5", "FEE")),
         transfer_price: None,
     })?;
+    config.update(|mut cfg| {
+        cfg.transfer_price = Some(coin(2, "FEE"));
+        Ok(cfg)
+    })?;
+    let loaded = config.load()?;
     OK(())
 }
 ```
