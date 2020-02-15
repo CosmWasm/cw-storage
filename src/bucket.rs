@@ -265,9 +265,7 @@ mod test {
         bucket.save(b"maria", &init).unwrap();
 
         // it's my birthday
-        let output = bucket.update(b"maria", &|_d| {
-            contract_err("cuz i feel like it")
-        });
+        let output = bucket.update(b"maria", &|_d| contract_err("cuz i feel like it"));
         assert!(output.is_err());
 
         // load it properly
@@ -286,12 +284,12 @@ mod test {
         };
 
         // it's my birthday
-        let output = bucket.update(b"maria", &|d| {
-            match d {
+        let output = bucket
+            .update(b"maria", &|d| match d {
                 Some(_) => contract_err("Ensure this was empty"),
                 None => Ok(init_value.clone()),
-            }
-        }).unwrap();
+            })
+            .unwrap();
         assert_eq!(output, init_value);
 
         // nothing stored
