@@ -1,4 +1,3 @@
-use named_type::NamedType;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use std::marker::PhantomData;
 
@@ -9,21 +8,21 @@ use crate::type_helpers::{may_deserialize, must_deserialize, serialize};
 
 pub fn typed<S: Storage, T>(storage: &mut S) -> TypedStorage<S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     TypedStorage::new(storage)
 }
 
 pub fn typed_read<S: ReadonlyStorage, T>(storage: &S) -> ReadonlyTypedStorage<S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     ReadonlyTypedStorage::new(storage)
 }
 
 pub struct TypedStorage<'a, S: Storage, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     storage: &'a mut S,
     // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
@@ -32,7 +31,7 @@ where
 
 impl<'a, S: Storage, T> TypedStorage<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     pub fn new(storage: &'a mut S) -> Self {
         TypedStorage {
@@ -74,7 +73,7 @@ where
 
 pub struct ReadonlyTypedStorage<'a, S: ReadonlyStorage, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     storage: &'a S,
     // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
@@ -83,7 +82,7 @@ where
 
 impl<'a, S: ReadonlyStorage, T> ReadonlyTypedStorage<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     pub fn new(storage: &'a S) -> Self {
         ReadonlyTypedStorage {
@@ -111,13 +110,12 @@ mod test {
     use super::*;
     use cosmwasm::errors::{contract_err, NotFound};
     use cosmwasm::mock::MockStorage;
-    use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
     use snafu::OptionExt;
 
     use crate::prefixed;
 
-    #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug, Clone)]
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
     struct Data {
         pub name: String,
         pub age: i32,

@@ -6,10 +6,16 @@ CosmWasm library with useful helpers for Storage patterns.
 This is not in the core library, so feel free to fork it and modify or extend as desired for your contracts.
 Pull Requests back to upstream repo with new or improved features are always welcome.
 
+Requires Rust v1.38+ (for `std::any::type_name` used to generate serialization error messages)
+
+Compatible with CosmWasm v0.6.0+
+
 ## Contents
 
 * [PrefixedStorage](#prefixed-storage)
 * [TypedStoreage](#typed-storage)
+* [Bucket](#bucket)
+* [Singleton](#singleton)
 
 ### Prefixed Storage
 
@@ -98,5 +104,74 @@ let expected = Data {
 assert_eq!(output, expected);
 ``` 
 
+### Bucket
+
+Since the above idiom (a subspace for a class of items) is so common and useful, 
+and there is no easy way to return this from a function 
+(bucket holds a reference to space, and cannot live longer than the local variable), the two are often
+combined into a `Bucket`. A Bucket works just like the example above, except the creation can be
+in another function:
+
+```rust
+use cosmwasm::mock::MockStorage;
+use cw_storage::{bucket, Bucket};
+
+fn people<'a, S: Storage>(storage: &'a mut S) -> Bucket<'a, S, Data> {
+    bucket(b"people", storage)
+}
+
+fn do_stuff() -> Result <()> {
+    let mut store = MockStorage::new();
+    people(&mut store).save(b"john", &Data{
+        name: "John",
+        age: 314,
+    })?;
+    OK(())
+}
+```
+
+### Singleton
+
+Singleton is another wrapper around the `TypedStorage` API. There are cases when we don't need
+a whole subspace to hold arbitrary key-value lookup for typed data, but rather one single instance.
+The simplest example is some *configuration* information for a contract. For example, in the 
+[name service example](https://github.com/confio/cosmwasm-examples/tree/master/nameservice),
+there is a `Bucket` to look up name to name data, but we also have a `Singleton` to store
+global configuration - namely the price of buying a name.
+
+```rust
+use cosmwasm::mock::MockStorage;
+use cosmwasm::types::{Coin, coin};
+
+use cw_storage::{singleton};
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, NamedType)]
+pub struct Config {
+    pub purchase_price: Option<Coin>,
+    pub transfer_price: Option<Coin>,
+}
+
+fn initialize() -> Result<()> {
+    let mut store = MockStorage::new();
+    let config = singleton(&mut store, b"config");
+    config.save(&Config{
+        purchase_price: Some(coin("5", "FEE")),
+        transfer_price: None,
+    })?;
+    config.update(|mut cfg| {
+        cfg.transfer_price = Some(coin(2, "FEE"));
+        Ok(cfg)
+    })?;
+    let loaded = config.load()?;
+    OK(())
+}
+```
+
+`Singleton` works just like `Bucket`, except the `save`, `load`, `update` methods don't take
+a key, and `update` requires the object to already exist (use `save` the first time).
+For `Buckets`, we often don't know which keys exist, but `Singletons` should be
+initialized when the contract is instantiated.
+
 Since the heart of much of the smart contract code is simply transformations upon some stored state,
-We may be able to just code the transforms and let the `TypedStorage` APIs take care of all the boilerplate.
+We may be able to just code the state transitions and let the `TypedStorage` APIs take care of all
+the boilerplate.

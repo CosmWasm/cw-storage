@@ -1,14 +1,20 @@
-use named_type::NamedType;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use snafu::ResultExt;
+use std::any::type_name;
 
 use cosmwasm::errors::{NotFound, ParseErr, Result, SerializeErr};
 use cosmwasm::serde::{from_slice, to_vec};
 
+// how we can make these names simpler if so desired
+//fn short_type_name<T>() -> &'static str {
+//    let long = std::any::type_name::<T>();
+//    long.rsplit("::").next().unwrap_or(long)
+//}
+
 /// serialize makes json bytes, but returns a cosmwasm::Error
-pub fn serialize<T: Serialize + NamedType>(data: &T) -> Result<Vec<u8>> {
+pub fn serialize<T: Serialize>(data: &T) -> Result<Vec<u8>> {
     to_vec(data).context(SerializeErr {
-        kind: T::short_type_name(),
+        kind: type_name::<T>(),
     })
 }
 
@@ -16,9 +22,7 @@ pub fn serialize<T: Serialize + NamedType>(data: &T) -> Result<Vec<u8>> {
 ///
 /// value is an odd type, but this is meant to be easy to use with output from storage.get (Option<Vec<u8>>)
 /// and value.map(|s| s.as_slice()) seems trickier than &value
-pub(crate) fn may_deserialize<T: DeserializeOwned + NamedType>(
-    value: &Option<Vec<u8>>,
-) -> Result<Option<T>> {
+pub(crate) fn may_deserialize<T: DeserializeOwned>(value: &Option<Vec<u8>>) -> Result<Option<T>> {
     match value {
         Some(d) => Ok(Some(deserialize(d.as_slice())?)),
         None => Ok(None),
@@ -26,22 +30,20 @@ pub(crate) fn may_deserialize<T: DeserializeOwned + NamedType>(
 }
 
 /// must_deserialize parses json bytes from storage (Option), returning NotFound error if no data present
-pub(crate) fn must_deserialize<T: DeserializeOwned + NamedType>(
-    value: &Option<Vec<u8>>,
-) -> Result<T> {
+pub(crate) fn must_deserialize<T: DeserializeOwned>(value: &Option<Vec<u8>>) -> Result<T> {
     match value {
         Some(d) => deserialize(&d),
         None => NotFound {
-            kind: T::short_type_name(),
+            kind: type_name::<T>(),
         }
         .fail(),
     }
 }
 
 // deserialize is a reflection of serialize and probably what most people outside the crate expect
-pub fn deserialize<T: DeserializeOwned + NamedType>(value: &[u8]) -> Result<T> {
+pub fn deserialize<T: DeserializeOwned>(value: &[u8]) -> Result<T> {
     from_slice(value).context(ParseErr {
-        kind: T::short_type_name(),
+        kind: type_name::<T>(),
     })
 }
 
@@ -49,10 +51,9 @@ pub fn deserialize<T: DeserializeOwned + NamedType>(value: &[u8]) -> Result<T> {
 mod test {
     use super::*;
     use cosmwasm::errors::Error;
-    use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug)]
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct Data {
         pub name: String,
         pub age: i32,
@@ -84,7 +85,10 @@ mod test {
 
         let parsed = must_deserialize::<Data>(&None);
         match parsed {
-            Err(Error::NotFound { kind }) => assert_eq!(kind, "Data"),
+            // if we used short_type_name, this would just be Data
+            Err(Error::NotFound { kind }) => {
+                assert_eq!(kind, "cw_storage::type_helpers::test::Data")
+            }
             Err(e) => panic!("Unexpected error {}", e),
             Ok(_) => panic!("should error"),
         }

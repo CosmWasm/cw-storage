@@ -1,4 +1,3 @@
-use named_type::NamedType;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use std::marker::PhantomData;
 
@@ -10,7 +9,7 @@ use crate::type_helpers::{may_deserialize, must_deserialize, serialize};
 
 pub fn bucket<'a, S: Storage, T>(namespace: &[u8], storage: &'a mut S) -> Bucket<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     Bucket::new(namespace, storage)
 }
@@ -20,14 +19,14 @@ pub fn bucket_read<'a, S: ReadonlyStorage, T>(
     storage: &'a S,
 ) -> ReadonlyBucket<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     ReadonlyBucket::new(namespace, storage)
 }
 
 pub struct Bucket<'a, S: Storage, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     storage: &'a mut S,
     // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
@@ -37,7 +36,7 @@ where
 
 impl<'a, S: Storage, T> Bucket<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     pub fn new(namespace: &[u8], storage: &'a mut S) -> Self {
         Bucket {
@@ -90,7 +89,7 @@ where
 
 pub struct ReadonlyBucket<'a, S: ReadonlyStorage, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     storage: &'a S,
     // see https://doc.rust-lang.org/std/marker/struct.PhantomData.html#unused-type-parameters for why this is needed
@@ -100,7 +99,7 @@ where
 
 impl<'a, S: ReadonlyStorage, T> ReadonlyBucket<'a, S, T>
 where
-    T: Serialize + DeserializeOwned + NamedType,
+    T: Serialize + DeserializeOwned,
 {
     pub fn new(namespace: &[u8], storage: &'a S) -> Self {
         ReadonlyBucket {
@@ -137,11 +136,10 @@ mod test {
     use super::*;
     use cosmwasm::errors::{contract_err, NotFound};
     use cosmwasm::mock::MockStorage;
-    use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
     use snafu::OptionExt;
 
-    #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug, Clone)]
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
     struct Data {
         pub name: String,
         pub age: i32,

@@ -1,6 +1,4 @@
 // derive macros
-use named_type::NamedType;
-use named_type_derive::NamedType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +11,7 @@ use crate::Singleton;
 /// but mainly to be able to derive NamedType.
 /// If named_type included a default derivation for u64 and other primitives, we could
 /// just use a u64 here.
-#[derive(Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq, JsonSchema, NamedType)]
+#[derive(Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq, JsonSchema)]
 pub struct SeqVal(pub u64);
 
 /// Sequence creates a custom Singleton to hold an empty sequence
