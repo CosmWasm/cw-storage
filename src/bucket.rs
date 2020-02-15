@@ -75,11 +75,13 @@ where
     }
 
     /// update will load the data, perform the specified action, and store the result
-    /// in the database. This is shorthand for some common sequences, which may be useful
+    /// in the database. This is shorthand for some common sequences, which may be useful.
+    /// Note that this only updates *pre-existing* values. If you want to modify possibly
+    /// non-existent values, please use `may_update`
     ///
     /// This is the least stable of the APIs, and definitely needs some usage
-    pub fn update(&mut self, key: &[u8], action: &dyn Fn(T) -> Result<T>) -> Result<T> {
-        let input = self.load(key)?;
+    pub fn update(&mut self, key: &[u8], action: &dyn Fn(Option<T>) -> Result<T>) -> Result<T> {
+        let input = self.may_load(key)?;
         let output = action(input)?;
         self.save(key, &output)?;
         Ok(output)
@@ -133,12 +135,13 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use cosmwasm::errors::ContractErr;
+    use cosmwasm::errors::{contract_err, NotFound};
     use cosmwasm::mock::MockStorage;
     use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
+    use snafu::OptionExt;
 
-    #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug)]
+    #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug, Clone)]
     struct Data {
         pub name: String,
         pub age: i32,
@@ -233,7 +236,8 @@ mod test {
         bucket.save(b"maria", &init).unwrap();
 
         // it's my birthday
-        let birthday = |mut d: Data| {
+        let birthday = |mayd: Option<Data>| -> Result<Data> {
+            let mut d = mayd.context(NotFound { kind: "Data" })?;
             d.age += 1;
             Ok(d)
         };
@@ -262,12 +266,7 @@ mod test {
         bucket.save(b"maria", &init).unwrap();
 
         // it's my birthday
-        let output = bucket.update(b"maria", &|_d| {
-            ContractErr {
-                msg: "cuz i feel like it",
-            }
-            .fail()
-        });
+        let output = bucket.update(b"maria", &|_d| contract_err("cuz i feel like it"));
         assert!(output.is_err());
 
         // load it properly
@@ -276,19 +275,26 @@ mod test {
     }
 
     #[test]
-    fn update_fails_on_no_data() {
+    fn update_handles_on_no_data() {
         let mut store = MockStorage::new();
         let mut bucket = bucket::<_, Data>(b"data", &mut store);
 
+        let init_value = Data {
+            name: "Maria".to_string(),
+            age: 42,
+        };
+
         // it's my birthday
-        let output = bucket.update(b"maria", &|mut d| {
-            d.age += 1;
-            Ok(d)
-        });
-        assert!(output.is_err());
+        let output = bucket
+            .update(b"maria", &|d| match d {
+                Some(_) => contract_err("Ensure this was empty"),
+                None => Ok(init_value.clone()),
+            })
+            .unwrap();
+        assert_eq!(output, init_value);
 
         // nothing stored
-        let loaded = bucket.may_load(b"maria").unwrap();
-        assert_eq!(loaded, None);
+        let loaded = bucket.load(b"maria").unwrap();
+        assert_eq!(loaded, init_value);
     }
 }
