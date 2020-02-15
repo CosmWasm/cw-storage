@@ -135,10 +135,11 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use cosmwasm::errors::contract_err;
+    use cosmwasm::errors::{contract_err, NotFound};
     use cosmwasm::mock::MockStorage;
     use named_type_derive::NamedType;
     use serde::{Deserialize, Serialize};
+    use snafu::OptionExt;
 
     #[derive(Serialize, Deserialize, NamedType, PartialEq, Debug, Clone)]
     struct Data {
@@ -236,7 +237,7 @@ mod test {
 
         // it's my birthday
         let birthday = |mayd: Option<Data>| -> Result<Data> {
-            let mut d = mayd.unwrap();
+            let mut d = mayd.context(NotFound { kind: "Data" })?;
             d.age += 1;
             Ok(d)
         };
