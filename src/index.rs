@@ -1,9 +1,10 @@
-use serde::{de::DeserializeOwned, ser::Serialize};
+use serde::{Deserialize, Serialize};
 
 use cosmwasm::errors::Result;
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
 use crate::namespace_helpers::key_prefix;
+use crate::typed::{typed, typed_read};
 
 pub fn index<T, F>(namespace: &[u8], action: F) -> Index<T>
     where F: Fn(&T) -> Vec<u8> + 'static {
@@ -27,6 +28,14 @@ impl<T> Index<T> {
     }
 }
 
+
+/// IndexEntry is persisted to disk and lists all primary keys that have a given index value
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
+struct IndexEntry {
+    // TODO: make this Vec<Base64> in 0.7.0
+    pub refs: Vec<Vec<u8>>,
+}
+
 /*
 This is getting expensive.
 Saving an item without index is 1 write
@@ -37,7 +46,7 @@ It *may* be possible to reduce the number of reads, but writes cannot change
 */
 
 // must do a read for old data
-fn write_index<S: Storage, T: Serialize + DeserializeOwned>(storage: &mut S, idx: &Index<T>, pk: &[u8], old_val: Option<&T>, new_val: &T) -> Result<()> {
+fn write_index<S: Storage, T>(storage: &mut S, idx: &Index<T>, pk: &[u8], old_val: Option<&T>, new_val: &T) -> Result<()> {
     let old_idx = old_val.map(|o| idx.calc_key(o));
     let new_idx = idx.calc_key(new_val);
 
@@ -56,17 +65,24 @@ fn write_index<S: Storage, T: Serialize + DeserializeOwned>(storage: &mut S, idx
 }
 
 fn remove_key<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8]) -> Result<()> {
-    // TODO: load from position and remove the key
-    // read+write
-    Ok(())
+    let mut db = typed(storage);
+    let mut entry: IndexEntry = db.load(idx)?;
+    // TODO: error if not found?
+    entry.refs = entry.refs.into_iter().filter(|r| r.as_slice() != pk).collect();
+    db.save(idx, &entry)
 }
 
 fn add_key<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8]) -> Result<()> {
-    // TODO: load from position and remove the key
-    // read+write
-    Ok(())
+    let mut db = typed(storage);
+    let mut entry: IndexEntry = db.may_load(idx)?.unwrap_or_default();
+    entry.refs.push(pk.to_vec());
+    db.save(idx, &entry)
 }
 
+fn load_keys<S: ReadonlyStorage>(storage: &S, idx: &[u8]) -> Result<Option<IndexEntry>> {
+    let db = typed_read(storage);
+    db.may_load(idx)
+}
 
 #[cfg(test)]
 mod test {
