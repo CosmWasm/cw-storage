@@ -18,6 +18,7 @@ where
     }
 }
 
+// TODO: add unique field
 pub struct Index<T> {
     prefix: Vec<u8>,
     action: Box<dyn Fn(&T) -> Vec<u8>>,
@@ -32,11 +33,13 @@ impl<T> Index<T> {
     }
 }
 
+// TODO: make this Base64 in 0.7.0
+type Ref = Vec<u8>;
+
 /// IndexEntry is persisted to disk and lists all primary keys that have a given index value
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
 struct IndexEntry {
-    // TODO: make this Vec<Base64> in 0.7.0
-    pub refs: Vec<Vec<u8>>,
+    pub refs: Vec<Ref>,
 }
 
 /*
@@ -73,6 +76,18 @@ pub fn write_index<S: Storage, T>(
     add_ref(storage, new_idx.as_slice(), pk)
 }
 
+/// read_refs find all references that match the template object
+/// this can just have the 1 field set that the Index needs to calculate the key from
+pub fn read_refs<S: ReadonlyStorage, T>(
+    storage: &S,
+    idx: &Index<T>,
+    template: &T,
+) -> Result<Vec<Ref>> {
+    let idx_key = idx.calc_key(template);
+    let entry = load_refs(storage, &idx_key)?.unwrap_or_default();
+    Ok(entry.refs)
+}
+
 pub fn remove_ref<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8]) -> Result<()> {
     let mut db = typed(storage);
     let mut entry: IndexEntry = db.load(idx)?;
@@ -104,7 +119,7 @@ mod test {
     use cosmwasm::mock::MockStorage;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
     struct Person {
         pub name: String,
         pub age: u32,
@@ -175,5 +190,59 @@ mod test {
         add_ref(&mut store, idx, pk2).unwrap();
         let loaded = load_refs(&store, idx).unwrap().unwrap();
         assert_eq!(loaded.refs, vec![pk2]);
+    }
+
+    #[test]
+    fn create_with_index() {
+        let mut store = MockStorage::new();
+
+        let idx = index(b"foo", |p: &Person| p.age.to_be_bytes().to_vec());
+        let bob = Person {
+            name: "Roberto".to_string(),
+            age: 66,
+        };
+
+        write_index(&mut store, &idx, b"where", None, &bob).unwrap();
+
+        // make sure it is there
+        let mut template = Person::default();
+        template.age = 66;
+        let refs = read_refs(&store, &idx, &template).unwrap();
+        assert_eq!(refs, vec![b"where".to_vec()]);
+
+        // but not for another age
+        template.age = 67;
+        let refs = read_refs(&store, &idx, &template).unwrap();
+        assert_eq!(refs, Vec::<Ref>::new());
+    }
+
+    #[test]
+    fn update_with_index() {
+        let mut store = MockStorage::new();
+
+        let idx = index(b"foo", |p: &Person| p.age.to_be_bytes().to_vec());
+        let bob = Person {
+            name: "Roberto".to_string(),
+            age: 66,
+        };
+
+        // set initial age
+        write_index(&mut store, &idx, b"where", None, &bob).unwrap();
+
+        // time for a birthday
+        let mut bobby = bob.clone();
+        bobby.age += 1;
+        write_index(&mut store, &idx, b"where", Some(&bob), &bobby).unwrap();
+
+        // make sure it is at the new one
+        let mut template = Person::default();
+        template.age = 67;
+        let refs = read_refs(&store, &idx, &template).unwrap();
+        assert_eq!(refs, vec![b"where".to_vec()]);
+
+        // and gone from the old one
+        template.age = 66;
+        let refs = read_refs(&store, &idx, &template).unwrap();
+        assert_eq!(refs, Vec::<Ref>::new());
     }
 }
