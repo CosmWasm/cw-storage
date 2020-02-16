@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+// remote this when we use index
 use serde::{Deserialize, Serialize};
 
 use cosmwasm::errors::Result;
@@ -7,7 +9,9 @@ use crate::namespace_helpers::key_prefix;
 use crate::typed::{typed, typed_read};
 
 pub fn index<T, F>(namespace: &[u8], action: F) -> Index<T>
-    where F: Fn(&T) -> Vec<u8> + 'static {
+where
+    F: Fn(&T) -> Vec<u8> + 'static,
+{
     Index {
         prefix: key_prefix(namespace),
         action: Box::new(action),
@@ -28,7 +32,6 @@ impl<T> Index<T> {
     }
 }
 
-
 /// IndexEntry is persisted to disk and lists all primary keys that have a given index value
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
 struct IndexEntry {
@@ -39,14 +42,20 @@ struct IndexEntry {
 /*
 This is getting expensive.
 Saving an item without index is 1 write
-Creating an item with 1 index is 2 read + 2 write (1 read to check old value, 1 read+write to add_key)
-Updating an item with 1 index is 3 read + 3 write (1 read to check old value, 1 read+write to add_key, 1 read+write to remove_key)
+Creating an item with 1 index is 2 read + 2 write (1 read to check old value, 1 read+write to add_ref)
+Updating an item with 1 index is 3 read + 3 write (1 read to check old value, 1 read+write to add_ref, 1 read+write to remove_ref)
 
 It *may* be possible to reduce the number of reads, but writes cannot change
 */
 
 // must do a read for old data
-fn write_index<S: Storage, T>(storage: &mut S, idx: &Index<T>, pk: &[u8], old_val: Option<&T>, new_val: &T) -> Result<()> {
+pub fn write_index<S: Storage, T>(
+    storage: &mut S,
+    idx: &Index<T>,
+    pk: &[u8],
+    old_val: Option<&T>,
+    new_val: &T,
+) -> Result<()> {
     let old_idx = old_val.map(|o| idx.calc_key(o));
     let new_idx = idx.calc_key(new_val);
 
@@ -57,29 +66,34 @@ fn write_index<S: Storage, T>(storage: &mut S, idx: &Index<T>, pk: &[u8], old_va
             return Ok(());
         }
         // otherwise, remove it
-        remove_key(storage, o.as_slice(), pk)?;
+        remove_ref(storage, o.as_slice(), pk)?;
     }
 
     // now add the new pk
-    add_key(storage, new_idx.as_slice(), pk)
+    add_ref(storage, new_idx.as_slice(), pk)
 }
 
-fn remove_key<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8]) -> Result<()> {
+pub fn remove_ref<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8]) -> Result<()> {
     let mut db = typed(storage);
     let mut entry: IndexEntry = db.load(idx)?;
     // TODO: error if not found?
-    entry.refs = entry.refs.into_iter().filter(|r| r.as_slice() != pk).collect();
+    entry.refs = entry
+        .refs
+        .into_iter()
+        .filter(|r| r.as_slice() != pk)
+        .collect();
     db.save(idx, &entry)
 }
 
-fn add_key<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8]) -> Result<()> {
+pub fn add_ref<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8]) -> Result<()> {
     let mut db = typed(storage);
     let mut entry: IndexEntry = db.may_load(idx)?.unwrap_or_default();
+    // TODO: sort them?
     entry.refs.push(pk.to_vec());
     db.save(idx, &entry)
 }
 
-fn load_keys<S: ReadonlyStorage>(storage: &S, idx: &[u8]) -> Result<Option<IndexEntry>> {
+fn load_refs<S: ReadonlyStorage>(storage: &S, idx: &[u8]) -> Result<Option<IndexEntry>> {
     let db = typed_read(storage);
     db.may_load(idx)
 }
@@ -87,6 +101,7 @@ fn load_keys<S: ReadonlyStorage>(storage: &S, idx: &[u8]) -> Result<Option<Index
 #[cfg(test)]
 mod test {
     use super::*;
+    use cosmwasm::mock::MockStorage;
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -100,7 +115,65 @@ mod test {
         let idx = index(b"foo", |p: &Person| p.age.to_be_bytes().to_vec());
 
         let expected = vec![0u8, 3, b'f', b'o', b'o', 0, 0, 0, 127];
-        let trial = idx.calc_key(&Person{ name: "Fred".to_string(), age: 127 });
+        let trial = idx.calc_key(&Person {
+            name: "Fred".to_string(),
+            age: 127,
+        });
         assert_eq!(trial, expected);
+    }
+
+    #[test]
+    fn add_refs_works() {
+        let mut store = MockStorage::new();
+
+        let pk: &[u8] = b"primary";
+        let pk2: &[u8] = b"second";
+        let idx: &[u8] = b"special key";
+
+        let loaded = load_refs(&store, idx).unwrap();
+        assert_eq!(loaded, None);
+
+        add_ref(&mut store, idx, pk).unwrap();
+        let loaded = load_refs(&store, idx).unwrap().unwrap();
+        assert_eq!(loaded.refs, vec![pk]);
+
+        add_ref(&mut store, idx, pk2).unwrap();
+        let loaded = load_refs(&store, idx).unwrap().unwrap();
+        assert_eq!(loaded.refs, vec![pk, pk2]);
+
+        // TODO: test adding same ref second time -> ensure not added
+    }
+
+    #[test]
+    fn remove_refs_works() {
+        let mut store = MockStorage::new();
+
+        let pk: &[u8] = b"primary";
+        let pk2: &[u8] = b"second";
+        let idx: &[u8] = b"special key";
+
+        // set up with 2
+        add_ref(&mut store, idx, pk).unwrap();
+        add_ref(&mut store, idx, pk2).unwrap();
+
+        // remove one and see change
+        remove_ref(&mut store, idx, pk).unwrap();
+        let loaded = load_refs(&store, idx).unwrap().unwrap();
+        assert_eq!(loaded.refs, vec![pk2]);
+
+        // ignore second removal (TODO: is this right?)
+        remove_ref(&mut store, idx, pk).unwrap();
+        let loaded = load_refs(&store, idx).unwrap().unwrap();
+        assert_eq!(loaded.refs, vec![pk2]);
+
+        // goes to empty (not None)
+        remove_ref(&mut store, idx, pk2).unwrap();
+        let loaded = load_refs(&store, idx).unwrap().unwrap();
+        assert_eq!(loaded.refs.len(), 0);
+
+        // can add again later
+        add_ref(&mut store, idx, pk2).unwrap();
+        let loaded = load_refs(&store, idx).unwrap().unwrap();
+        assert_eq!(loaded.refs, vec![pk2]);
     }
 }
