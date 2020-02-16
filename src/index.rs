@@ -2,7 +2,7 @@
 // remote this when we use index
 use serde::{Deserialize, Serialize};
 
-use cosmwasm::errors::Result;
+use cosmwasm::errors::{contract_err, Result};
 use cosmwasm::traits::{ReadonlyStorage, Storage};
 
 use crate::namespace_helpers::key_prefix;
@@ -15,6 +15,18 @@ where
     Index {
         prefix: key_prefix(namespace),
         action: Box::new(action),
+        unique: false,
+    }
+}
+
+pub fn unique_index<T, F>(namespace: &[u8], action: F) -> Index<T>
+where
+    F: Fn(&T) -> Vec<u8> + 'static,
+{
+    Index {
+        prefix: key_prefix(namespace),
+        action: Box::new(action),
+        unique: true,
     }
 }
 
@@ -22,6 +34,7 @@ where
 pub struct Index<T> {
     prefix: Vec<u8>,
     action: Box<dyn Fn(&T) -> Vec<u8>>,
+    unique: bool,
 }
 
 impl<T> Index<T> {
@@ -73,7 +86,7 @@ pub fn write_index<S: Storage, T>(
     }
 
     // now add the new pk
-    add_ref(storage, new_idx.as_slice(), pk)
+    add_ref(storage, new_idx.as_slice(), pk, idx.unique)
 }
 
 /// read_refs find all references that match the template object
@@ -100,9 +113,12 @@ pub fn remove_ref<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8]) -> Result<
     db.save(idx, &entry)
 }
 
-pub fn add_ref<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8]) -> Result<()> {
+pub fn add_ref<S: Storage>(storage: &mut S, idx: &[u8], pk: &[u8], unique: bool) -> Result<()> {
     let mut db = typed(storage);
     let mut entry: IndexEntry = db.may_load(idx)?.unwrap_or_default();
+    if unique && !entry.refs.is_empty() {
+        return contract_err("Second write to unique index");
+    }
     // TODO: sort them?
     entry.refs.push(pk.to_vec());
     db.save(idx, &entry)
@@ -148,11 +164,11 @@ mod test {
         let loaded = load_refs(&store, idx).unwrap();
         assert_eq!(loaded, None);
 
-        add_ref(&mut store, idx, pk).unwrap();
+        add_ref(&mut store, idx, pk, false).unwrap();
         let loaded = load_refs(&store, idx).unwrap().unwrap();
         assert_eq!(loaded.refs, vec![pk]);
 
-        add_ref(&mut store, idx, pk2).unwrap();
+        add_ref(&mut store, idx, pk2, false).unwrap();
         let loaded = load_refs(&store, idx).unwrap().unwrap();
         assert_eq!(loaded.refs, vec![pk, pk2]);
 
@@ -168,8 +184,8 @@ mod test {
         let idx: &[u8] = b"special key";
 
         // set up with 2
-        add_ref(&mut store, idx, pk).unwrap();
-        add_ref(&mut store, idx, pk2).unwrap();
+        add_ref(&mut store, idx, pk, false).unwrap();
+        add_ref(&mut store, idx, pk2, false).unwrap();
 
         // remove one and see change
         remove_ref(&mut store, idx, pk).unwrap();
@@ -187,7 +203,34 @@ mod test {
         assert_eq!(loaded.refs.len(), 0);
 
         // can add again later
-        add_ref(&mut store, idx, pk2).unwrap();
+        add_ref(&mut store, idx, pk2, false).unwrap();
+        let loaded = load_refs(&store, idx).unwrap().unwrap();
+        assert_eq!(loaded.refs, vec![pk2]);
+    }
+
+    #[test]
+    fn unique_constraint_enforced() {
+        let mut store = MockStorage::new();
+
+        let pk: &[u8] = b"primary";
+        let pk2: &[u8] = b"second";
+        let idx: &[u8] = b"special key";
+
+        let loaded = load_refs(&store, idx).unwrap();
+        assert_eq!(loaded, None);
+
+        // first add works
+        add_ref(&mut store, idx, pk, true).unwrap();
+
+        // second add should be error
+        let trial = add_ref(&mut store, idx, pk2, true);
+        assert!(trial.is_err());
+
+        // if I remove this, I can add a different one
+        remove_ref(&mut store, idx, pk).unwrap();
+        add_ref(&mut store, idx, pk2, true).unwrap();
+
+        // ensure disk is properly updated
         let loaded = load_refs(&store, idx).unwrap().unwrap();
         assert_eq!(loaded.refs, vec![pk2]);
     }
