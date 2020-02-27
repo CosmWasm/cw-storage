@@ -145,7 +145,7 @@ use cosmwasm::types::{Coin, coin};
 
 use cw_storage::{singleton};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, NamedType)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
     pub purchase_price: Option<Coin>,
     pub transfer_price: Option<Coin>,
