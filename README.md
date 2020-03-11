@@ -1,6 +1,6 @@
 # cw-storage
 
-[![CircleCI](https://circleci.com/gh/confio/cw-storage/tree/master.svg?style=shield)](https://circleci.com/gh/confio/cw-storage/tree/master) 
+[![CircleCI](https://circleci.com/gh/CosmWasm/cw-storage/tree/master.svg?style=shield)](https://circleci.com/gh/CosmWasm/cw-storage/tree/master) 
 
 CosmWasm library with useful helpers for Storage patterns.
 This is not in the core library, so feel free to fork it and modify or extend as desired for your contracts.
@@ -8,7 +8,7 @@ Pull Requests back to upstream repo with new or improved features are always wel
 
 Requires Rust v1.38+ (for `std::any::type_name` used to generate serialization error messages)
 
-Compatible with CosmWasm v0.6.0+
+Compatible with CosmWasm v0.7.x
 
 ## Contents
 
@@ -92,9 +92,12 @@ Beyond the basic `save`, `load`, and `may_load`, there is a higher-level API exp
 It will also return any error that occurred, or the final state that was written if successful.
 
 ```rust
-let birthday = |mut d: Data| {
-    d.age += 1;
-    Ok(d)
+let birthday = |mut m: Option<Data>| match m {
+    Some(mut d) => { 
+        d.age += 1; 
+        Ok(d) 
+    },
+    None =>  NotFound{ kind: 'Data'}.fail(),
 };
 let output = bucket.update(b"maria", &birthday).unwrap();
 let expected = Data {
@@ -135,7 +138,7 @@ fn do_stuff() -> Result <()> {
 Singleton is another wrapper around the `TypedStorage` API. There are cases when we don't need
 a whole subspace to hold arbitrary key-value lookup for typed data, but rather one single instance.
 The simplest example is some *configuration* information for a contract. For example, in the 
-[name service example](https://github.com/confio/cosmwasm-examples/tree/master/nameservice),
+[name service example](https://github.com/CosmWasm/cosmwasm-examples/tree/master/nameservice),
 there is a `Bucket` to look up name to name data, but we also have a `Singleton` to store
 global configuration - namely the price of buying a name.
 
@@ -168,7 +171,8 @@ fn initialize() -> Result<()> {
 ```
 
 `Singleton` works just like `Bucket`, except the `save`, `load`, `update` methods don't take
-a key, and `update` requires the object to already exist (use `save` the first time).
+a key, and `update` requires the object to already exist, so the closure takes
+type `T`, rather than `Option<T>`. (Use `save` to create the object the first time).
 For `Buckets`, we often don't know which keys exist, but `Singletons` should be
 initialized when the contract is instantiated.
 
