@@ -12,7 +12,8 @@ cosmwasm-storage package in https://github.com/CosmWasm/cosmwasm.
 
 # cw-storage
 
-[![CircleCI](https://circleci.com/gh/CosmWasm/cw-storage/tree/master.svg?style=shield)](https://circleci.com/gh/CosmWasm/cw-storage/tree/master) 
+[![CircleCI](https://circleci.com/gh/CosmWasm/cw-storage/tree/master.svg?style=shield)](https://circleci.com/gh/CosmWasm/cw-storage/tree/master)
+![Maintenance](https://img.shields.io/badge/maintenance-unmaintainted-critical.svg)
 
 CosmWasm library with useful helpers for Storage patterns.
 This is not in the core library, so feel free to fork it and modify or extend as desired for your contracts.
