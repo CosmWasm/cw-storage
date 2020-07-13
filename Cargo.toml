@@ -1,6 +1,6 @@
 [package]
 name = "cw-storage"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Ethan Frey <ethanfrey@users.noreply.github.com>"]
 edition = "2018"
 description = "CosmWasm library with useful helpers for Storage patterns"
@@ -11,7 +11,7 @@ license = "Apache-2.0"
 
 [badges]
 circle-ci = { repository = "CosmWasm/cw-storage", branch = "master" }
-maintenance = { status = "actively-developed" }
+maintenance = { status = "deprecated" }
 
 [dependencies]
 cosmwasm = "~0.7.0"
