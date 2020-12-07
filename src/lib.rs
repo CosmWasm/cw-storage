@@ -1,4 +1,5 @@
 mod bucket;
+mod index;
 mod namespace_helpers;
 mod prefix;
 mod sequence;
